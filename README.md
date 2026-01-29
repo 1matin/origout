@@ -232,6 +232,7 @@ Each node maintains a **local trust score** (0-100) for every peer it interacts 
 * **Zero-trust between nodes**: Nodes never believe claims from other nodes unless cryptographically verifiable
 * **Not globally visible**: Users cannot see their trust score; it's internal node state
 * **New users start at 60**: Optimized for legitimate use cases, not paranoia
+* **Activity-based**: Trust does not increase automatically over time—users must engage in legitimate activity to build trust
 
 Trust scores gradually increase as nodes observe legitimate behavior over time. High-trust users experience:
 * Little to no Proof of Work challenges
@@ -431,16 +432,18 @@ The cache node network is designed so that adding nodes meaningfully increases t
 **Replication strategy**:
 * Cache nodes track what other public cache nodes are seeding
 * When receiving a new repository push, nodes calculate what percentage of the network already has it
-* Nodes accept the repository only if fewer than ~40% of cache nodes (or 5 nodes, whichever is less) are seeding it
-* This prevents over-replication while ensuring adequate availability
+* **Trust-weighted calculation**: Nodes use trust-weighted percentage rather than simple node count to prevent Sybil manipulation
+* Nodes accept the repository if both trust-weighted percentage is under threshold AND fewer than a minimum number of high-trust nodes have it
+* This prevents over-replication while ensuring adequate availability and Sybil resistance
 
 **Proof of Storage (PoS)**:
 * Nodes announce their inventory via signed messages
-* Other nodes can challenge these claims based on trust score
+* **Periodic challenges**: Peers periodically challenge each other's storage claims based on trust score
 * Challenger solves a PoW to initiate challenge
 * Challenger picks a repository it also has and issues a cryptographic challenge
 * If the challenged node fails to provide correct proof, the challenger has a signed **Proof of Misbehaviour (PoM)**
 * PoM is broadcast network-wide, decreasing the liar's trust score everywhere
+* Only recently verified nodes count toward replication percentage calculations
 
 **Dynamic clustering**:
 * Cache nodes naturally form fluid clusters based on overlapping seed lists
@@ -448,7 +451,7 @@ The cache node network is designed so that adding nodes meaningfully increases t
 * Groupings are not hardened—they adapt dynamically to network changes
 * When cache nodes go offline, remaining nodes automatically rebalance
 
-This design ensures that network capacity scales efficiently with the number of cache nodes while maintaining data availability and preventing storage waste.
+This design ensures that network capacity scales efficiently with the number of cache nodes while maintaining data availability, preventing storage waste, and resisting Sybil attacks through trust-weighted decisions.
 
 Cache nodes serve as availability and discovery helpers, treating storage as temporary cache rather than permanent archive.
 
@@ -715,6 +718,17 @@ Origout includes a distributed reporting system for repositories (not individual
 4. Moderators cast votes on whether reports are valid
 5. Network-wide consensus emerges from volunteer moderation
 
+**Sybil-resistant moderation**:
+
+To prevent Sybil attacks on the moderation system, origout implements multiple defenses:
+
+* **Trust threshold for participation**: Only users above a certain trust threshold can participate in moderation voting
+* **Trust-weighted voting**: Votes are weighted exponentially by voter trust score, making high-trust votes significantly more influential than low-trust votes
+* **Strong identity verification** (under consideration): May require AT Protocol TLD handles or other strong validation methods
+* **Delegation-based moderation privileges** (under consideration): Similar to repository privilege trees, network-wide moderation could use a delegation chain rooted in project maintainers
+
+The exact approach will be a mixture of these mechanisms and will be finalized during implementation based on real-world testing.
+
 **Owner inactivity handling**:
 * First strike: Warning
 * Second strike: Repository becomes read-only until owner takes action
@@ -738,7 +752,7 @@ Clone the repo with: origout clone <RID>
 Cast your vote with: origout report vote <RID> [approve|refuse|abstain]
 ```
 
-This system provides **decentralized moderation** without centralized authority, relying on volunteer consensus and trust scores.
+This system provides **decentralized moderation** without centralized authority, relying on volunteer consensus, trust-weighted decisions, and strong identity verification to resist Sybil attacks.
 
 ### 11.5 Cross-Repository References
 
@@ -787,11 +801,40 @@ Forking is explicit and requires no protocol coordination. **Your fork, your rep
 * **No implicit trust**: All actions require cryptographic verification
 * **Fully offline verifiable**: Delegation chains and signatures can be validated without network access
 * **Resistant to spam**: Multi-layered anti-spam system makes abuse computationally expensive
+* **Sybil-resistant**: Trust is earned through activity, not granted automatically; trust-weighted decisions prevent Sybil majority attacks
 * **Moderation with accountability**: Authority is explicit and actions are signed
-* **Sybil-resistant**: Trust is earned slowly; mass identity creation provides no advantage
 * **Self-custody**: Users maintain full control of their private keys (and responsibility for securing them)
 * **Minimal trusted computing base**: Only trust your own node and cryptographic primitives
 * **Graceful degradation**: Low trust increases friction but doesn't prevent participation
+
+### Sybil Attack Resistance
+
+Origout's design includes multiple layers of defense against Sybil attacks:
+
+**Mass identity creation**: Creating identities is free, but using them effectively is expensive due to:
+* Proof of Work requirements on connections and actions
+* Rate limiting per identity
+* Trust scores starting at 60 and requiring activity to increase
+* Immediate Proof of Misbehaviour generation for spam
+
+**Sybil cache nodes**: Prevented through:
+* Proof of Storage with periodic peer challenges
+* Trust-weighted replication calculations (Sybil nodes with low trust have minimal influence)
+* Only recently verified nodes count toward replication decisions
+* Minimum high-trust node redundancy requirements
+
+**Sybil moderation attacks**: Mitigated by:
+* Trust threshold for moderation participation
+* Exponentially trust-weighted voting (high-trust votes count disproportionately more)
+* Possible strong identity requirements (AT Protocol TLD handles)
+* Possible delegation-based moderation privileges
+
+**Long-game trust grinding**: Sophisticated attackers who build legitimate-looking identities over months remain a theoretical concern. However:
+* First misbehavior triggers Proof of Misbehaviour, immediately dropping trust
+* Cost-benefit analysis makes this impractical (months of legitimate activity for one spam burst)
+* This attack vector affects all reputation systems; no perfect solution exists yet
+
+The combination of activity-based trust, cryptographic verification, computational costs, and trust-weighted decisions makes Sybil attacks prohibitively expensive for attackers while keeping friction minimal for legitimate users.
 
 ## 14. Platform Scope
 
