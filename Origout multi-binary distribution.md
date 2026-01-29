@@ -1,0 +1,3 @@
+Origout has intentionally a lot of moving parts. From the P2P server and user identity  management to moderation and server-specific optimization scripts. Although developer machines and always on servers are treated the same way in P2P protocol, it doesn't mean that they need the same set of tools to work.
+
+That's why origout uses the similar method to Git for its distributions. There's a minimal origout binary, and almost all important functionality is provided by pseudo-subcommands. For example, "origout-node" is the main binary for interacting with the self hosted node, but it is called like "origout node ..." as the origout binary tried to do so when deals with an unknown command first.
