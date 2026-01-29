@@ -409,6 +409,7 @@ Cache nodes are configurable infrastructure nodes that:
 
 * **Temporary storage**: Store repositories based on activity, not permanently
 * **Automatic cleanup**: Delete inactive repositories to prevent storage bloat
+* **Intelligent replication**: Cache nodes coordinate to optimize network-wide capacity utilization
 * **Configurable policies**:
   - Manual approval vs. automatic acceptance of repositories
   - Repository size limits (individually configurable, e.g., 1GB default)
@@ -420,6 +421,34 @@ Cache nodes are configurable infrastructure nodes that:
 * **Re-pushable**: Deleted repositories can be re-pushed by users when needed
 
 **Running a cache node**: Anyone can run a cache node by hosting the origout binary. No special configuration or compensation model is required—operators choose to provide availability as infrastructure.
+
+#### Cache Network Capacity Scaling
+
+The cache node network is designed so that adding nodes meaningfully increases total capacity:
+
+**Design goal**: If all cache nodes have 100GB storage and there are 5 nodes, doubling to 10 nodes should increase total network capacity by at least 50%.
+
+**Replication strategy**:
+* Cache nodes track what other public cache nodes are seeding
+* When receiving a new repository push, nodes calculate what percentage of the network already has it
+* Nodes accept the repository only if fewer than ~40% of cache nodes (or 5 nodes, whichever is less) are seeding it
+* This prevents over-replication while ensuring adequate availability
+
+**Proof of Storage (PoS)**:
+* Nodes announce their inventory via signed messages
+* Other nodes can challenge these claims based on trust score
+* Challenger solves a PoW to initiate challenge
+* Challenger picks a repository it also has and issues a cryptographic challenge
+* If the challenged node fails to provide correct proof, the challenger has a signed **Proof of Misbehaviour (PoM)**
+* PoM is broadcast network-wide, decreasing the liar's trust score everywhere
+
+**Dynamic clustering**:
+* Cache nodes naturally form fluid clusters based on overlapping seed lists
+* Clustering reduces sync latency by minimizing hops for event propagation
+* Groupings are not hardened—they adapt dynamically to network changes
+* When cache nodes go offline, remaining nodes automatically rebalance
+
+This design ensures that network capacity scales efficiently with the number of cache nodes while maintaining data availability and preventing storage waste.
 
 Cache nodes serve as availability and discovery helpers, treating storage as temporary cache rather than permanent archive.
 
@@ -530,17 +559,52 @@ git log                       # passed to git normally
 
 This design allows users to keep their Git muscle memory while origout handles P2P coordination transparently.
 
-### 9.2 Local Web UI
+### 9.2 Distribution Model
+
+Origout uses a **Git-like distribution model** with pseudo-subcommands:
+
+* **Main binary**: `origout` - wrapper that dispatches to specialized tools
+* **Specialized binaries**: 
+  - `origout-node` - P2P server and node management (called via `origout node ...`)
+  - `origout-wui` - local web UI server (called via `origout webui ...`)
+  - `origout-node-index` - node index generator for bootstrapping
+  - Additional tools as needed
+
+When `origout` encounters an unknown command, it attempts to execute `origout-<command>` as a separate binary, similar to how `git` works with `git-<command>`.
+
+**Universal JSON output**: All origout commands accept a `--json` flag that returns consistent, versioned JSON output. This enables:
+* Easy testing and automation
+* Third-party tool development
+* Alternative UIs and integrations
+* Scriptable workflows
+
+Example:
+```bash
+origout node status --json
+{
+  "version": "1.0",
+  "repos_seeded": 47,
+  "storage_used": "73GB",
+  "peer_connections": 23
+}
+```
+
+### 9.3 Local Web UI
 
 Origout provides a **GitHub-like web interface running locally**:
 
-* Launch with `git webui` (or `origout webui`)
+* Launch with `origout webui` (or `git webui` via wrapper)
 * Serves on localhost (e.g., `http://localhost:3000`)
+* **Technology stack**: Go + Fiber + Templ + GORM GEN
+* **Not for public hosting**: Automatically uses the cryptographic keys of the machine it runs on
+* **Progressive enhancement**: Fully functional without JavaScript, enhanced with JS for convenience (reactions, comments without page refresh)
+* **Familiar UX**: UI philosophy between SourceHut and GitHub—simpler than GitHub, more user-friendly than SourceHut
+* **First-class theming**: Dark mode and high-contrast themes as core features
 * Full issue tracking, code review, project management
-* Familiar UX for users comfortable with GitHub/GitLab
-* No need to reinvent UI paradigms
 
-### 9.3 Official Mirrors
+The web UI is architecturally a **wrapper around the CLI**, leveraging the `--json` flag for all data operations. This keeps business logic in one place and ensures consistency.
+
+### 9.4 Official Mirrors
 
 Origout supports traditional Git hosting for discoverability and transition:
 
@@ -586,7 +650,41 @@ To create a new repository:
 
 Repositories exist independently from the network, but network connectivity is required to share them. Users can work on repositories locally before pushing.
 
-### 11.2 Repository Caching and Subscription
+### 11.2 Network Discovery and Bootstrap
+
+Origout includes a sophisticated bootstrap mechanism to ensure reliable network connectivity:
+
+**Node Index System**:
+* **Node indexes** are lightweight JSON HTTP endpoints listing discovered nodes
+* Can be hosted on static file hosting (GitHub, S3, personal servers)
+* Generated by `origout-node-index` binary
+* Self-updating: Periodically connects to listed nodes, updates the list, commits changes
+
+**Hardcoded diverse list**: The binary ships with a comprehensive list of node indexes from multiple sources:
+* Official origout node indexes
+* Community-run indexes
+* Individual cache nodes
+* Reduces dependency on any single infrastructure provider
+
+Example node index structure:
+```json
+{
+  "version": "1.0",
+  "last_updated": "2026-01-29T12:00:00Z",
+  "nodes": [
+    {"id": "...", "address": "..."},
+    {"id": "...", "address": "..."}
+  ]
+}
+```
+
+This approach ensures that:
+* New users can always discover the network
+* No single point of failure for bootstrap
+* Indexes can be updated independently
+* Community can contribute discovery infrastructure
+
+### 11.3 Repository Caching and Subscription
 
 Users control which repositories they actively track:
 
@@ -595,7 +693,54 @@ Users control which repositories they actively track:
 * **Local control**: Each user decides how many repositories to cache based on their resources
 * **Not GitHub-style feeds**: Discovery mechanisms exist but without centralized feeds
 
-### 11.3 Cross-Repository References
+### 11.4 Repository Reporting and Moderation
+
+Origout includes a distributed reporting system for repositories (not individual issues or activities within them):
+
+**Report categories**:
+1. Adult content
+2. Copyright infringement
+3. Owner inactivity (repository isn't being moderated)
+4. Hate, discrimination, terrorism
+5. Other illegal activity
+
+**Reporting workflow**:
+1. Users report repositories to the network
+2. Volunteer moderators access reports via `origout report moderate`
+3. Moderators see:
+   - Repository ID and clone command
+   - Report count and most common reason
+   - Trust index of reporters
+   - Current vote distribution from other moderators
+4. Moderators cast votes on whether reports are valid
+5. Network-wide consensus emerges from volunteer moderation
+
+**Owner inactivity handling**:
+* First strike: Warning
+* Second strike: Repository becomes read-only until owner takes action
+* Third strike: Repository becomes read-only permanently (to be discussed further)
+
+Example moderation interface:
+```
+Showing list of repositories with active reports
+Your trust score is estimated: Mid-high
+
+Repo #1: RID
+Report count: 5
+Most common reason: Copyright
+Trust index of reporters: Mid-low
+60% of volunteer moderators approved
+30% refused
+10% had no opinions
+Total voted moderators: 69
+
+Clone the repo with: origout clone <RID>
+Cast your vote with: origout report vote <RID> [approve|refuse|abstain]
+```
+
+This system provides **decentralized moderation** without centralized authority, relying on volunteer consensus and trust scores.
+
+### 11.5 Cross-Repository References
 
 Issues and other metadata can reference other repositories:
 
@@ -603,7 +748,7 @@ Issues and other metadata can reference other repositories:
 * **No verification**: The system does not verify that referenced repositories or issues exist
 * References are informational, not enforced by protocol
 
-### 11.4 Key Management
+### 11.6 Key Management
 
 Origout uses **self-custody** for private keys:
 
@@ -612,7 +757,7 @@ Origout uses **self-custody** for private keys:
 * Users should implement their own backup strategies (encrypted backups, hardware keys, etc.)
 * Key rotation is possible while maintaining the same DID
 
-### 11.5 Pre-1.0 Version Enforcement
+### 11.7 Pre-1.0 Version Enforcement
 
 Before version 1.0.0, origout includes a version enforcement mechanism:
 
