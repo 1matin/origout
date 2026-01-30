@@ -1,4 +1,4 @@
-# Origout: A Simple, Authoritative, P2P Git Collaboration System
+# Origout Whitepaper: A Simple, Authoritative, P2P Git Collaboration System
 
 ## 1. Motivation
 
