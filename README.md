@@ -1,4 +1,4 @@
-# Origout Whitepaper: A Simple, Authoritative, P2P Git Collaboration System
+# Origout: A Simple, Authoritative, P2P Git Collaboration System
 
 ## 1. Motivation
 
@@ -227,12 +227,12 @@ Origout implements a sophisticated, multi-layered anti-spam system that makes th
 
 ### 6.1 Trust Score
 
-Each node maintains a **local trust score** (0-100) for every peer it interacts with:
+Each node maintains a **local trust score** for every peer it interacts with:
 
 * **Purely local**: Each node calculates trust independently with no consensus
 * **Zero-trust between nodes**: Nodes never believe claims from other nodes unless cryptographically verifiable
 * **Not globally visible**: Users cannot see their trust score; it's internal node state
-* **New users start at 60**: Optimized for legitimate use cases, not paranoia
+* **New users start with moderate trust**: Optimized for legitimate use cases, not paranoia
 * **Activity-based**: Trust does not increase automatically over time—users must engage in legitimate activity to build trust
 
 Trust scores gradually increase as nodes observe legitimate behavior over time. High-trust users experience:
@@ -592,6 +592,7 @@ Origout uses a **Git-like distribution model** with pseudo-subcommands:
 * **Specialized binaries**: 
   - `origout-node` - P2P server and node management (called via `origout node ...`)
   - `origout-wui` - local web UI server (called via `origout webui ...`)
+  - `origout-mail` - local mail server for email-based workflow (called via `origout mail ...`)
   - `origout-node-index` - node index generator for bootstrapping
   - Additional tools as needed
 
@@ -628,6 +629,40 @@ Origout provides a **GitHub-like web interface running locally**:
 * Full issue tracking, code review, project management
 
 The web UI is architecturally a **wrapper around the CLI**, leveraging the `--json` flag for all data operations. This keeps business logic in one place and ensures consistency.
+
+### 9.4 Local Mail Server
+
+For users who prefer email-based workflows (similar to SourceHut or Linux kernel development), origout provides a **local mail server interface**:
+
+* Launch with `origout mail start`
+* Runs local SMTP and IMAP servers on localhost
+* **Compatible with standard email clients**: Thunderbird, mutt, Mail.app, etc.
+* **git send-email support**: Full compatibility with patch-based development workflows
+* **Privacy-preserving**: User's real email address never exposed to the network; all communication uses cryptographic identities
+
+**How it works**:
+1. `origout-mail` daemon watches for network events via CLI
+2. Events (issues, PRs, comments) are presented as emails in IMAP mailboxes
+3. User interacts via their preferred email client
+4. Outgoing emails are translated to origout CLI commands
+5. CLI handles all SQLite and P2P network operations
+
+**Key features**:
+* **git send-email compatibility**: Patch series sent via email create pull requests automatically
+* **Full threading support**: Issues and PRs maintain proper email thread hierarchy
+* **Configurable filters**: Fine-grained control over which events generate emails (e.g., exclude reactions, enable digest mode)
+* **No email exposure**: Network sees only DIDs/handles, never real email addresses
+* **Offline operation**: Queues outgoing messages, syncs when network available
+
+**Cross-interface collaboration**: 
+* Developer A uses `git send-email` to submit patches → creates PR
+* Developer B reviews via web UI → posts code review comments
+* Developer C responds via CLI → adds inline comments
+* Developer A receives review comments in their email client
+
+All three developers collaborate seamlessly using their preferred interface. The underlying data model (issues, PRs, comments) is interface-agnostic, enabling true cross-communication between CLI, web UI, and email workflows.
+
+The mail server is architecturally a **wrapper around the CLI**, just like the web UI, ensuring consistency across all interfaces.
 
 ### 9.4 Official Mirrors
 
@@ -757,6 +792,8 @@ The exact approach will be a mixture of these mechanisms and will be finalized d
 * Second strike: Repository becomes read-only until owner takes action
 * Third strike: Repository becomes read-only permanently (to be discussed further)
 
+**Note on maturity**: The network-wide reporting system is experimental and has a long way to stabilize. Moderation is not a fully solved problem even in centralized platforms, and origout aims to not be worse than existing solutions while exploring decentralized approaches.
+
 Example moderation interface:
 ```
 Showing list of repositories with active reports
@@ -815,6 +852,17 @@ Origout supports flexible CI/CD workflows:
 * **Event hooks**: Origout provides webhooks and event triggers for CI/CD integration
 
 This flexibility ensures projects can maintain existing workflows or adopt new ones without platform lock-in.
+
+### 11.9 Optional Donation Information
+
+Origout provides a simple mechanism for discovering donation information without built-in payment systems:
+
+* **`origout donate` command**: Fetches donation metadata from frequently used nodes and the current maintainer
+* **Generic metadata**: Nodes can list any donation method (GitHub Sponsors, Patreon, bank account, cryptocurrency address, etc.)
+* **No protocol enforcement**: All donations are voluntary and external to the protocol
+* **Informational only**: No automatic payment distribution or tracking
+
+This allows community members running infrastructure to optionally make donation information discoverable while keeping the protocol free from payment complexity.
 
 ---
 
