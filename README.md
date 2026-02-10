@@ -441,7 +441,7 @@ The cache node network is designed so that adding nodes meaningfully increases t
 * Nodes accept the repository if both trust-weighted percentage is under threshold AND fewer than a minimum number of high-trust nodes have it
 * This prevents over-replication while ensuring adequate availability and Sybil resistance
 
-**Proof of Storage (PoS)**:
+**Proof of Replication (PoR)**:
 * Nodes announce their inventory via signed messages
 * **Periodic challenges**: Peers periodically challenge each other's storage claims based on trust score
 * Challenger solves a PoW to initiate challenge
@@ -537,12 +537,39 @@ Origout supports **end-to-end encrypted (E2EE) private repositories** that can b
 
 Private repositories remain **opt-in**. Public repositories use no encryption for simplicity and efficiency.
 
-### 8.7 Tor Support
+### 8.9 Large File Support
 
-* Native onion-service support for additional privacy
-* Optional Tor-only operation for maximum anonymity
+Origout provides native support for Git LFS (Large File Storage) with P2P distribution:
 
-### 8.8 Direct Peer-to-Peer Connections
+**Architecture**:
+* User's local origout node runs an LFS server that Git LFS clients communicate with
+* LFS objects are distributed to cache nodes and peers via the P2P network
+* Complete files are replicated across nodes (no chunking by default) for reliability
+* LFS storage is managed separately from Git object storage with independent quotas
+
+**Replication strategy**:
+* **Geographic distribution**: LFS files are replicated to a minimum of three nodes across different geographic regions (determined by IP address analysis)
+* **Regional preference**: Better distribution across continents/regions rather than percentage-based replication
+* **Proof of Replication (PoR)**: Periodic challenges verify nodes still possess LFS files
+* **Higher PoW for PoR**: LFS verification requires higher difficulty PoW than Git objects due to computational intensity
+
+**Large file handling**:
+* **Optional chunking**: Files exceeding 10GB can be optionally chunked for improved distribution and partial retrieval
+* **Parallel downloads**: LFS files can be downloaded from multiple cache nodes simultaneously for improved performance
+* **Bandwidth optimization**: Delta transfers and resume support reduce redundant data transfer
+
+**Cache node policies**:
+* Nodes set their own LFS file size limits based on hardcoded defaults, trust scores, or custom validation scripts
+* LFS hosting generally requires higher trust than Git hosting due to storage costs
+* Nodes can disable LFS hosting entirely or allocate separate storage quotas
+* Private E2EE repositories can use LFS if cache nodes explicitly allocate quota for encrypted LFS objects
+
+**Trust-based decisions**:
+* High-trust repositories receive better LFS replication and retention
+* Low-trust users may face higher PoW requirements for LFS uploads
+* LFS storage is deprioritized compared to Git objects when storage is constrained
+
+Users interact with Git LFS through standard tooling; origout handles P2P distribution, replication verification, and geographic optimization transparently.
 
 For private repositories, users can establish direct peer-to-peer connections between developers, bypassing public cache nodes entirely:
 
