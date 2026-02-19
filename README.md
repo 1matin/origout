@@ -6,13 +6,15 @@ Modern Git collaboration is effectively centralized around platforms like GitHub
 
 **Origout** (named as the opposite of "origin" in `git push origin master`, because there is no origin) is a **simpler, authoritative, cryptographically verifiable, peer-to-peer Git collaboration system** that:
 
-* Removes reliance on centralized servers
-* Preserves a single canonical repository state
+* Decentralizes infrastructure and code distribution
+* Preserves explicit repository ownership with a single authoritative owner
 * Supports moderation and role-based permissions
 * Allows delegation and revocation of authority
 * Includes sophisticated anti-spam and trust mechanisms
 * Remains forkable and censorship-resistant
 * Provides a familiar GitHub-like experience through local web UI
+
+**Critical distinction**: Origout decentralizes where code lives (infrastructure), not who controls it (authority). Each repository has one owner with full privileges; that ownership is cryptographic and platform-independent, not mediated by centralized infrastructure.
 
 The design prioritizes **engineering practicality over ideological symmetry**.
 
@@ -41,9 +43,183 @@ Non-goals:
 
 ---
 
-## 3. Identity System
+## 3. Discovery and Networking
 
-### 3.1 Decentralized Identifiers (DIDs)
+### 3.1 Repository Discovery
+
+When a user clones a repository by handle (e.g., `compiler@rust-lang.org`):
+
+1. **DNS Resolution**: DNS TXT record lookup for subdomain `compiler.rust-lang.org` returns the repository's DID
+2. **DID to RepoID**: The DID maps to the repository's public key, which is hashed to produce the RepoID
+3. **DHT Query**: The RepoID is queried in the distributed hash table (DHT)
+4. **Peer List**: DHT returns a list of nodes currently hosting the repository
+5. **Connection**: User's node connects to available peers and fetches the repository
+
+**Bootstrap**: New nodes connect to hardcoded node indexes (see section 3.3) to join the DHT and discover the network.
+
+### 3.2 Node Architecture
+
+* **Every user is a node**: Users run origout locally, participating directly in the P2P network
+* **Cache nodes**: Infrastructure nodes that improve availability and bootstrapping
+* **No privileged nodes**: Cache nodes have no authority over repository content or governance
+
+### 3.3 Cache Nodes
+
+Cache nodes are configurable infrastructure nodes that:
+
+* **Temporary storage**: Store repositories based on activity, not permanently
+* **Priority-based cleanup**: Cache nodes maintain a priority list of all repositories; when storage is full, the least priority repositories are cleared to make space
+* **Intelligent replication**: Cache nodes coordinate to optimize network-wide capacity utilization
+* **Configurable policies**:
+  - Manual approval vs. automatic acceptance of repositories
+  - Repository size limits (individually configurable, e.g., 1GB default)
+  - Custom sidecar scripts for content validation
+  - Activity thresholds for retention
+  - **Private repository policies**: Admins can refuse private repositories entirely, assign them limited total storage quota, or give them low priority in caching
+* **Trust-based prioritization**: High-trust users' repositories remain cached longer and receive higher priority
+* **Repository pinning**: Nodes can pin specific repositories to prevent removal even when storage is full
+* **No authority**: Cannot modify repository content or governance
+* **Re-pushable**: Deleted repositories can be re-pushed by users when needed
+
+**Running a cache node**: Anyone can run a cache node by hosting the origout binary. No special configuration or compensation model is required—operators choose to provide availability as infrastructure.
+
+#### Cache Network Capacity Scaling
+
+The cache node network is designed so that adding nodes meaningfully increases total capacity:
+
+**Design goal**: If all cache nodes have 100GB storage and there are 5 nodes, doubling to 10 nodes should increase total network capacity by at least 50%.
+
+**Replication strategy**:
+* Cache nodes track what other public cache nodes are seeding
+* When receiving a new repository push, nodes calculate what percentage of the network already has it
+* **Trust-weighted calculation**: Nodes use trust-weighted percentage rather than simple node count to prevent Sybil manipulation
+* Nodes accept the repository if both trust-weighted percentage is under threshold AND fewer than a minimum number of high-trust nodes have it
+* This prevents over-replication while ensuring adequate availability and Sybil resistance
+
+**Proof of Replication (PoR)**:
+* Nodes announce their inventory via signed messages
+* **Periodic challenges**: Peers periodically challenge each other's storage claims based on trust score
+* Challenger solves a PoW to initiate challenge
+* Challenger picks a repository it also has and issues a cryptographic challenge
+* If the challenged node fails to provide correct proof, the challenger has a signed **Proof of Misbehaviour (PoM)**
+* PoM is broadcast network-wide, decreasing the liar's trust score everywhere
+* Only recently verified nodes count toward replication percentage calculations
+
+**Dynamic clustering**:
+* Cache nodes naturally form fluid clusters based on overlapping seed lists
+* Clustering reduces sync latency by minimizing hops for event propagation
+* Groupings are not hardened—they adapt dynamically to network changes
+* When cache nodes go offline, remaining nodes automatically rebalance
+
+This design ensures that network capacity scales efficiently with the number of cache nodes while maintaining data availability, preventing storage waste, and resisting Sybil attacks through trust-weighted decisions.
+
+Cache nodes serve as availability and discovery helpers, treating storage as temporary cache rather than permanent archive.
+
+### 3.4 Transport
+
+* **libp2p** (Go implementation)
+* Encrypted by default
+* Multiplexed streams
+* **Standard Git protocol support**: Nodes respond to traditional `git pull` requests for code only (without SQLite metadata)
+
+### 3.5 Node Index System
+
+Origout includes a bootstrap mechanism to ensure reliable network connectivity:
+
+**Node indexes** are lightweight JSON HTTP endpoints listing discovered nodes:
+* Can be hosted on static file hosting (GitHub, S3, personal servers)
+* Generated by `origout-node-index` binary or scheduled CI actions (e.g., GitHub Actions)
+* **CI-based updates**: Automated workflows can periodically connect to previously scanned nodes, remove invalid ones, and discover new nodes
+* Self-updating: Periodically connects to listed nodes, updates the list, commits changes
+
+**Hardcoded diverse list**: The binary ships with a comprehensive list of node indexes from multiple sources:
+* Official origout node indexes
+* Community-run indexes
+* Individual cache nodes
+* Reduces dependency on any single infrastructure provider
+
+This approach ensures that new users can always discover the network with no single point of failure for bootstrap.
+
+### 3.6 Connection Management and Bandwidth
+
+When peers (users or cache nodes) attempt connections:
+
+* Each node individually tracks peer behavior
+* PoW difficulty adjusts per-connection based on trust and load
+* **Rate limiting**: Combined with PoW and trust to prevent bandwidth exhaustion
+* **Trust-based bandwidth allocation**: Low-trust users may face stricter rate limits on large fetches
+* Prevents mass connection spam through computational cost
+* High-trust peers connect with minimal friction
+
+**Note on DDoS**: Massive network-level DDoS attacks (overwhelming packet floods) are outside the scope of software-level solutions and would require infrastructure-level protection (e.g., CDN, filtering).
+
+### 3.7 Private Repositories
+
+Origout supports end-to-end encrypted private repositories that can be stored on public cache nodes without revealing content. Encryption protects both Git objects and SQLite collaboration metadata. Keys are distributed to authorized collaborators via out-of-band secure channels. Cache nodes see only encrypted data and cannot decrypt without authorization.
+
+Private repositories remain **opt-in**. Public repositories use no encryption for simplicity and efficiency.
+
+### 3.8 Large File Support
+
+Origout provides native support for Git LFS (Large File Storage) with P2P distribution:
+
+**Architecture**:
+* User's local origout node runs an LFS server that Git LFS clients communicate with
+* LFS objects are distributed to cache nodes and peers via the P2P network
+* Complete files are replicated across nodes (no chunking by default) for reliability
+* LFS storage is managed separately from Git object storage with independent quotas
+
+**Replication strategy**:
+* **Geographic distribution**: LFS files are replicated to a minimum of three nodes across different geographic regions (determined by IP address analysis)
+* **Regional preference**: Better distribution across continents/regions rather than percentage-based replication
+* **Proof of Replication (PoR)**: Periodic challenges verify nodes still possess LFS files
+* **Higher PoW for PoR**: LFS verification requires higher difficulty PoW than Git objects due to computational intensity
+
+**Large file handling**:
+* **Optional chunking**: Files exceeding 10GB can be optionally chunked for improved distribution and partial retrieval
+* **Parallel downloads**: LFS files can be downloaded from multiple cache nodes simultaneously for improved performance
+* **Bandwidth optimization**: Delta transfers and resume support reduce redundant data transfer
+
+**Cache node policies**:
+* Nodes set their own LFS file size limits based on hardcoded defaults, trust scores, or custom validation scripts
+* LFS hosting generally requires higher trust than Git hosting due to storage costs
+* Nodes can disable LFS hosting entirely or allocate separate storage quotas
+* Private E2EE repositories can use LFS if cache nodes explicitly allocate quota for encrypted LFS objects
+
+**Trust-based decisions**:
+* High-trust repositories receive better LFS replication and retention
+* Low-trust users may face higher PoW requirements for LFS uploads
+* LFS storage is deprioritized compared to Git objects when storage is constrained
+
+Users interact with Git LFS through standard tooling; origout handles P2P distribution, replication verification, and geographic optimization transparently.
+
+### 3.9 Tor Support
+
+* Native onion-service support for additional privacy
+* Optional Tor-only operation for maximum anonymity
+
+### 3.10 Direct Peer-to-Peer Connections
+
+For private repositories, users can establish direct peer-to-peer connections between developers, bypassing public cache nodes entirely:
+
+* **NAT traversal**: Users can use cache nodes to store temporary encrypted public IP addresses (using techniques like STUN, TURN, or UPnP)
+* **Direct encrypted channels**: Once IP addresses are exchanged, peers establish direct encrypted connections
+* **Private network formation**: Allows small teams to collaborate on private repositories without trusting cache nodes with encrypted data
+* **Bypasses public storage**: Eliminates dependency on cache nodes for private collaboration
+
+**Tradeoffs**:
+* **Friction**: Requires all collaborators to be online simultaneously or coordinate connection times
+* **Limitations**: NAT traversal doesn't always succeed; some network configurations block peer-to-peer connections
+* **Complexity**: More complex setup than using cache nodes with E2EE
+* **Best for**: Small, highly sensitive projects where avoiding public infrastructure is critical
+
+This option provides maximum privacy for teams willing to accept the additional coordination overhead.
+
+---
+
+## 4. Identity System
+
+### 4.1 Decentralized Identifiers (DIDs)
 
 Origout uses **DIDs** (Decentralized Identifiers) as the foundation for all identity:
 
@@ -52,33 +228,33 @@ Origout uses **DIDs** (Decentralized Identifiers) as the foundation for all iden
 * DIDs are permanent, cryptographic, and globally unique
 * All delegation certificates and signatures reference DIDs
 
-### 3.2 Human-Readable Handles
+### 4.2 Human-Readable Handles
 
 Users and repositories can claim **DNS-based handles** for readability, similar to Bluesky's AT Protocol:
 
 * Verified via DNS TXT records
-* Examples: `@alice.dev`, `@rust-lang.org`, `@company.com`
+* Examples: `user@alice.dev`, `compiler@rust-lang.org`, `wiki@company.com`
 * Domain owners automatically control their namespace
 * Handles resolve to DIDs, which resolve to public keys
 * **Optional trust boost**: DNS verification increases trust score, similar to email verification
 
-**Root domains vs. subdomains**: Root domain handles (e.g., `@example.com`) provide higher initial trust signals than subdomains (e.g., `@user.example.com`) since acquiring domains requires financial investment. However, both can earn equal trust over time through legitimate behavior.
+**Root domains vs. subdomains**: Root domain handles (e.g., `repo@example.com`) provide higher initial trust signals than subdomains (e.g., `repo@user.example.com`) since acquiring domains requires financial investment. However, both can earn equal trust over time through legitimate behavior.
 
 Handle resolution flow:
 
 ```bash
 # User clones by handle
-git clone @rust-lang/compiler.rust-lang.org
+git clone compiler@rust-lang.org
 
-# Handle resolves to DID
-@rust-lang.org → did:key:z6Mk...
+# DNS TXT lookup for compiler.rust-lang.org
+compiler.rust-lang.org → did:key:z6Mk...
 
 # DID resolves to repo public key and RepoID
 ```
 
 Handles are **for humans**, DIDs are **for the protocol**. If a handle changes, the DID remains constant, preserving all delegation chains and authority.
 
-### 3.3 Email Verification (Optional)
+### 4.3 Email Verification (Optional)
 
 Users can optionally verify email addresses to boost trust:
 
@@ -93,7 +269,7 @@ Email verification is:
 * Some repositories may require verified email for certain actions
 * Verified without dependence on centralized email providers
 
-### 3.4 Repository Identity
+### 4.4 Repository Identity
 
 Each repository is identified by:
 
@@ -109,7 +285,7 @@ The holder of the root private key is the **owner** and can:
 
 ---
 
-## 4. Authority Model
+## 5. Authority Model
 
 ### 4.1 Capabilities
 
@@ -190,7 +366,7 @@ Policies are signed by the repository owner and evaluated before delegation chec
 
 ---
 
-## 5. Revocation
+## 6. Revocation
 
 ### 5.1 Transitive Revocation
 
@@ -221,7 +397,7 @@ Delegations may include expiry timestamps to limit blast radius and ensure perio
 
 ---
 
-## 6. Trust and Anti-Spam System
+## 7. Trust and Anti-Spam System
 
 Origout implements a sophisticated, multi-layered anti-spam system that makes the network hostile to abuse while remaining frictionless for legitimate users.
 
@@ -332,7 +508,7 @@ This allows experimentation and specialized filtering without fragmenting the ne
 
 ---
 
-## 7. Data Model
+## 8. Data Model
 
 ### 7.1 Code Storage
 
@@ -739,38 +915,7 @@ Repositories exist independently from the network, but network connectivity is r
 
 ### 11.2 Network Discovery and Bootstrap
 
-Origout includes a sophisticated bootstrap mechanism to ensure reliable network connectivity:
-
-**Node Index System**:
-* **Node indexes** are lightweight JSON HTTP endpoints listing discovered nodes
-* Can be hosted on static file hosting (GitHub, S3, personal servers)
-* Generated by `origout-node-index` binary or scheduled CI actions (e.g., GitHub Actions)
-* **CI-based updates**: Automated workflows can periodically connect to previously scanned nodes, remove invalid ones, and discover new nodes
-* Self-updating: Periodically connects to listed nodes, updates the list, commits changes
-
-**Hardcoded diverse list**: The binary ships with a comprehensive list of node indexes from multiple sources:
-* Official origout node indexes
-* Community-run indexes
-* Individual cache nodes
-* Reduces dependency on any single infrastructure provider
-
-Example node index structure:
-```json
-{
-  "version": "1.0",
-  "last_updated": "2026-01-29T12:00:00Z",
-  "nodes": [
-    {"id": "...", "address": "..."},
-    {"id": "...", "address": "..."}
-  ]
-}
-```
-
-This approach ensures that:
-* New users can always discover the network
-* No single point of failure for bootstrap
-* Indexes can be updated independently via CI/CD
-* Community can contribute discovery infrastructure
+See section 3.5 for details on the node index system and network discovery mechanism.
 
 ### 11.3 Repository Caching and Subscription
 
@@ -958,7 +1103,23 @@ This focuses development resources on the core P2P experience rather than attemp
 
 ---
 
-## 15. Comparison to Radicle
+## 15. Comparison to Fossil
+
+| Aspect               | Fossil              | Origout                  |
+| -------------------- | ------------------- | ------------------------ |
+| Metadata storage     | SQLite in repo      | SQLite in repo (gitignored) |
+| Infrastructure       | Self-hosted server  | P2P network              |
+| Authority            | Repository admin    | Cryptographic owner      |
+| Distribution         | Pull from server    | Pull from any peer       |
+| Moderation           | Admin-controlled    | Owner + network volunteers |
+| Issues/Wiki          | Built-in            | Built-in (SQLite)        |
+| Discoverability      | Manual URL sharing  | DHT + DNS handles        |
+
+Origout shares Fossil's insight that collaboration metadata belongs in queryable storage (SQLite), not Git commits. However, Origout distributes this metadata via P2P rather than requiring a central server, and uses cryptographic authority instead of admin accounts.
+
+---
+
+## 16. Comparison to Radicle
 
 | Aspect               | Radicle           | Origout                  |
 | -------------------- | ----------------- | ------------------------ |
