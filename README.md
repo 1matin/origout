@@ -155,7 +155,12 @@ When peers (users or cache nodes) attempt connections:
 
 ### 3.7 Private Repositories
 
-Origout supports end-to-end encrypted private repositories that can be stored on public cache nodes without revealing content. Encryption protects both Git objects and SQLite collaboration metadata. Keys are distributed to authorized collaborators via out-of-band secure channels. Cache nodes see only encrypted data and cannot decrypt without authorization.
+Origout supports end-to-end encrypted private repositories that can be stored on public cache nodes without revealing content. 
+
+* Encryption protects both Git objects and SQLite collaboration metadata
+* Keys are distributed to authorized collaborators via out-of-band secure channels
+* Cache nodes see only encrypted data and cannot decrypt without authorization
+* Simpler operational model than Tor-only solutions
 
 Private repositories remain **opt-in**. Public repositories use no encryption for simplicity and efficiency.
 
@@ -287,7 +292,7 @@ The holder of the root private key is the **owner** and can:
 
 ## 5. Authority Model
 
-### 4.1 Capabilities
+### 5.1 Capabilities
 
 Permissions are expressed as explicit, namespaced capabilities:
 
@@ -301,7 +306,7 @@ Permissions are expressed as explicit, namespaced capabilities:
 
 Capabilities are composable and scoped.
 
-### 4.2 Delegation Certificates
+### 5.2 Delegation Certificates
 
 Authority is granted via signed delegation certificates:
 
@@ -320,7 +325,7 @@ Delegation {
 * Delegations form a tree rooted at the repository owner
 * Delegation depth is configurable per-user and per-privilege
 
-### 4.3 Rate-Limited Delegation (Invite Tree)
+### 5.3 Rate-Limited Delegation (Invite Tree)
 
 To prevent privilege escalation attacks and account compromise scenarios, delegation is rate-limited based on depth from the repository owner:
 
@@ -339,7 +344,7 @@ These limits are:
 
 This exponential decay prevents explosive spam from compromised accounts while allowing organic growth.
 
-### 4.4 Social Bootstrap
+### 5.4 Social Bootstrap
 
 New contributors gain capabilities through social trust:
 
@@ -350,7 +355,7 @@ New contributors gain capabilities through social trust:
 
 This maps to existing project workflows where trust is earned through participation, not protocol mechanisms.
 
-### 4.5 Repository Policy
+### 5.5 Repository Policy
 
 Repository-wide policy defines what **unauthorized or unapproved users** may do.
 
@@ -368,13 +373,13 @@ Policies are signed by the repository owner and evaluated before delegation chec
 
 ## 6. Revocation
 
-### 5.1 Transitive Revocation
+### 6.1 Transitive Revocation
 
 Delegations are valid **only while their issuer remains authorized**.
 
 Revoking a delegation or key automatically invalidates all delegations issued by that key.
 
-### 5.2 Explicit Revocation Records
+### 6.2 Explicit Revocation Records
 
 Revocations are signed records:
 
@@ -387,11 +392,11 @@ Revocation {
 
 Revocations propagate through the P2P network and are locally enforced.
 
-### 5.3 Impact on Trust
+### 6.3 Impact on Trust
 
 When an authority bans a user from a repository or blocks them, the user's trust score decreases in nodes that receive this update. This creates network-wide consequences for bad behavior while maintaining decentralized enforcement.
 
-### 5.4 Expiry and Renewal
+### 6.4 Expiry and Renewal
 
 Delegations may include expiry timestamps to limit blast radius and ensure periodic review.
 
@@ -401,7 +406,7 @@ Delegations may include expiry timestamps to limit blast radius and ensure perio
 
 Origout implements a sophisticated, multi-layered anti-spam system that makes the network hostile to abuse while remaining frictionless for legitimate users.
 
-### 6.1 Trust Score
+### 7.1 Trust Score
 
 Each node maintains a **local trust score** for every peer it interacts with:
 
@@ -417,7 +422,7 @@ Trust scores gradually increase as nodes observe legitimate behavior over time. 
 * Faster connection acceptance
 * Greater rate limits
 
-### 6.2 Trust Signals
+### 7.2 Trust Signals
 
 Multiple factors influence trust calculation (exact formula to be defined in implementation):
 
@@ -430,7 +435,7 @@ Multiple factors influence trust calculation (exact formula to be defined in imp
 * **Connection behavior**: Stable, non-abusive connection patterns
 * **Delegation depth**: Users closer to repository owners may have higher trust
 
-### 6.3 Proof of Work (PoW)
+### 7.3 Proof of Work (PoW)
 
 When peers connect or initiate communication (e.g., pushing a repository), the receiving node may request a **Proof of Work challenge**:
 
@@ -441,7 +446,7 @@ When peers connect or initiate communication (e.g., pushing a repository), the r
 * **Max difficulty limits**: Users can set maximum acceptable PoW difficulty (default ~10 minutes for users, lower for cache nodes)
 * **Per-connection challenges**: Each connection requires separate PoW, making mass spam computationally infeasible
 
-### 6.4 Proof of Misbehavior (PoM)
+### 7.4 Proof of Misbehavior (PoM)
 
 When a node detects abusive behavior, it can generate a cryptographically verifiable **Proof of Misbehavior**:
 
@@ -459,7 +464,7 @@ When a node detects abusive behavior, it can generate a cryptographically verifi
 
 This creates network-wide reputation consequences without requiring trust between nodes.
 
-### 6.5 Spam Detection Heuristics
+### 7.5 Spam Detection Heuristics
 
 Nodes automatically detect and respond to suspicious behavior:
 
@@ -483,7 +488,7 @@ When spam is detected:
 3. Propagates PoM to network
 4. Decreases local trust score for the offender
 
-### 6.6 Trust Recovery
+### 7.6 Trust Recovery
 
 Low-trust users can recover trust over time:
 
@@ -494,7 +499,7 @@ Low-trust users can recover trust over time:
 
 This prevents permanent ostracization while maintaining consequences for bad behavior.
 
-### 6.7 Scriptable Validation
+### 7.7 Scriptable Validation
 
 Nodes can optionally implement custom validation logic:
 
@@ -510,13 +515,13 @@ This allows experimentation and specialized filtering without fragmenting the ne
 
 ## 8. Data Model
 
-### 7.1 Code Storage
+### 8.1 Code Storage
 
 * Stored as a standard Git repository
 * Canonical branches maintained by authorized keys
 * Commits and ref updates are signed
 
-### 7.2 Collaboration Metadata
+### 8.2 Collaboration Metadata
 
 Non-code collaboration data is **not stored in Git**:
 
@@ -536,7 +541,7 @@ Instead:
 
 This avoids Git bloat and enables moderation and querying.
 
-### 7.3 Event Log
+### 8.3 Event Log
 
 Each collaboration action is represented as a signed event:
 
@@ -561,7 +566,7 @@ Events are:
 
 **Metadata retention**: Repository owners define retention policies for event logs. When repositories grow too large (e.g., exceeding 1GB), nodes may refuse new pushes, requiring owners to prune old metadata or increase limits.
 
-### 7.4 Conflict Resolution
+### 8.4 Conflict Resolution
 
 When conflicting events occur (e.g., two moderators make incompatible decisions simultaneously):
 
@@ -576,15 +581,15 @@ This only occurs when automatic resolution is impossible. The conflict becomes v
 
 ---
 
-## 8. Networking
+## 9. Networking
 
-### 8.1 Node Architecture
+### 9.1 Node Architecture
 
 * **Every user is a node**: Users run origout locally, participating directly in the P2P network
 * **Cache nodes**: Infrastructure nodes that improve availability and bootstrapping
 * **No privileged nodes**: Cache nodes have no authority over repository content or governance
 
-### 8.2 Cache Nodes
+### 9.2 Cache Nodes
 
 Cache nodes are configurable infrastructure nodes that:
 
@@ -636,20 +641,20 @@ This design ensures that network capacity scales efficiently with the number of 
 
 Cache nodes serve as availability and discovery helpers, treating storage as temporary cache rather than permanent archive.
 
-### 8.3 Transport
+### 9.3 Transport
 
 * **libp2p** (Go implementation)
 * Encrypted by default
 * Multiplexed streams
 * **Standard Git protocol support**: Nodes respond to traditional `git pull` requests for code only (without SQLite metadata)
 
-### 8.4 Discovery
+### 9.4 Discovery
 
 * Cache nodes for bootstrapping
 * DHT or rendezvous-based discovery
 * No authority assigned to cache nodes
 
-### 8.5 Connection Management and Bandwidth
+### 9.5 Connection Management and Bandwidth
 
 When peers (users or cache nodes) attempt connections:
 
@@ -662,7 +667,7 @@ When peers (users or cache nodes) attempt connections:
 
 **Note on DDoS**: Massive network-level DDoS attacks (overwhelming packet floods) are outside the scope of software-level solutions and would require infrastructure-level protection (e.g., CDN, filtering).
 
-### 8.6 Private Repositories
+### 9.6 Private Repositories
 
 Origout supports **end-to-end encrypted (E2EE) private repositories** that can be stored on public cache nodes without revealing content.
 
@@ -713,7 +718,7 @@ Origout supports **end-to-end encrypted (E2EE) private repositories** that can b
 
 Private repositories remain **opt-in**. Public repositories use no encryption for simplicity and efficiency.
 
-### 8.9 Large File Support
+### 9.7 Large File Support
 
 Origout provides native support for Git LFS (Large File Storage) with P2P distribution:
 
@@ -764,9 +769,9 @@ This option provides maximum privacy for teams willing to accept the additional 
 
 ---
 
-## 9. Git Integration
+## 10. Git Integration
 
-### 9.1 Transparent CLI Wrapper
+### 10.1 Transparent CLI Wrapper
 
 Origout is implemented as a **transparent wrapper for Git**:
 
@@ -787,7 +792,7 @@ git log                       # passed to git normally
 
 This design allows users to keep their Git muscle memory while origout handles P2P coordination transparently.
 
-### 9.2 Distribution Model
+### 10.2 Distribution Model
 
 Origout uses a **Git-like distribution model** with pseudo-subcommands:
 
@@ -818,7 +823,7 @@ $ origout node status --json
 }
 ```
 
-### 9.3 Local Web UI
+### 10.3 Local Web UI
 
 Origout provides a **GitHub-like web interface running locally**:
 
@@ -833,7 +838,7 @@ Origout provides a **GitHub-like web interface running locally**:
 
 The web UI is architecturally a **wrapper around the CLI**, leveraging the `--json` flag for all data operations. This keeps business logic in one place and ensures consistency.
 
-### 9.4 Local Mail Server
+### 10.4 Local Mail Server
 
 For users who prefer email-based workflows (similar to SourceHut or Linux kernel development), origout provides a **local mail server interface**:
 
@@ -867,7 +872,7 @@ All three developers collaborate seamlessly using their preferred interface. The
 
 The mail server is architecturally a **wrapper around the CLI**, just like the web UI, ensuring consistency across all interfaces.
 
-### 9.4 Official Mirrors
+### 10.5 Official Mirrors
 
 Origout supports traditional Git hosting for discoverability and transition:
 
@@ -882,7 +887,7 @@ Origout supports traditional Git hosting for discoverability and transition:
 
 ---
 
-## 10. Validation Flow
+## 11. Validation Flow
 
 When a node receives an action:
 
@@ -901,9 +906,9 @@ If validation fails at any step, the action is rejected.
 
 ---
 
-## 11. Bootstrap and Version Enforcement
+## 12. Bootstrap and Version Enforcement
 
-### 11.1 Initial Repository Creation
+### 12.1 Initial Repository Creation
 
 To create a new repository:
 
@@ -913,11 +918,11 @@ To create a new repository:
 
 Repositories exist independently from the network, but network connectivity is required to share them. Users can work on repositories locally before pushing.
 
-### 11.2 Network Discovery and Bootstrap
+### 12.2 Network Discovery and Bootstrap
 
 See section 3.5 for details on the node index system and network discovery mechanism.
 
-### 11.3 Repository Caching and Subscription
+### 12.3 Repository Caching and Subscription
 
 Users control which repositories they actively track:
 
@@ -926,7 +931,7 @@ Users control which repositories they actively track:
 * **Local control**: Each user decides how many repositories to cache based on their resources
 * **Not GitHub-style feeds**: Discovery mechanisms exist but without centralized feeds
 
-### 11.4 Repository Reporting and Moderation
+### 12.4 Repository Reporting and Moderation
 
 Origout includes a distributed reporting system for repositories (not individual issues or activities within them):
 
@@ -986,7 +991,7 @@ Cast your vote with: origout report vote <RID> [approve|refuse|abstain]
 
 This system provides **decentralized moderation** without centralized authority, relying on volunteer consensus, trust-weighted decisions, and strong identity verification to resist Sybil attacks.
 
-### 11.5 Cross-Repository References
+### 12.5 Cross-Repository References
 
 Issues and other metadata can reference other repositories:
 
@@ -994,7 +999,7 @@ Issues and other metadata can reference other repositories:
 * **No verification**: The system does not verify that referenced repositories or issues exist
 * References are informational, not enforced by protocol
 
-### 11.6 Key Management
+### 12.6 Key Management
 
 Origout uses **self-custody** for private keys:
 
@@ -1003,7 +1008,7 @@ Origout uses **self-custody** for private keys:
 * Users should implement their own backup strategies (encrypted backups, hardware keys, etc.)
 * Key rotation is possible while maintaining the same DID
 
-### 11.7 Pre-1.0 Version Enforcement
+### 12.7 Pre-1.0 Version Enforcement
 
 Before version 1.0.0, origout includes a version enforcement mechanism:
 
@@ -1014,7 +1019,7 @@ Before version 1.0.0, origout includes a version enforcement mechanism:
 
 This pragmatic approach prioritizes stability over decentralization purity during early development.
 
-### 11.8 CI/CD Integration
+### 12.8 CI/CD Integration
 
 Origout supports flexible CI/CD workflows:
 
@@ -1025,7 +1030,7 @@ Origout supports flexible CI/CD workflows:
 
 This flexibility ensures projects can maintain existing workflows or adopt new ones without platform lock-in.
 
-### 11.9 Optional Donation Information
+### 12.9 Optional Donation Information
 
 Origout provides a simple mechanism for discovering donation information without built-in payment systems:
 
@@ -1038,7 +1043,7 @@ This allows community members running infrastructure to optionally make donation
 
 ---
 
-## 12. Forking
+## 13. Forking
 
 Any participant may hard-fork a repository by:
 
@@ -1050,7 +1055,7 @@ Forking is explicit and requires no protocol coordination. **Your fork, your rep
 
 ---
 
-## 13. Security Properties
+## 14. Security Properties
 
 * **No implicit trust**: All actions require cryptographic verification
 * **Fully offline verifiable**: Delegation chains and signatures can be validated without network access
@@ -1090,7 +1095,7 @@ Origout's design includes multiple layers of defense against Sybil attacks:
 
 The combination of activity-based trust, cryptographic verification, computational costs, and trust-weighted decisions makes Sybil attacks prohibitively expensive for attackers while keeping friction minimal for legitimate users.
 
-## 14. Platform Scope
+## 15. Platform Scope
 
 Origout is designed as a **desktop-first** system:
 
@@ -1103,7 +1108,7 @@ This focuses development resources on the core P2P experience rather than attemp
 
 ---
 
-## 15. Comparison to Fossil
+## 16. Comparison to Fossil
 
 | Aspect               | Fossil              | Origout                  |
 | -------------------- | ------------------- | ------------------------ |
@@ -1119,7 +1124,7 @@ Origout shares Fossil's insight that collaboration metadata belongs in queryable
 
 ---
 
-## 16. Comparison to Radicle
+## 17. Comparison to Radicle
 
 | Aspect               | Radicle           | Origout                  |
 | -------------------- | ----------------- | ------------------------ |
@@ -1140,7 +1145,7 @@ Origout shares Fossil's insight that collaboration metadata belongs in queryable
 
 ---
 
-## 16. Comparison to GitHub
+## 18. Comparison to GitHub
 
 | Aspect                | GitHub             | Origout                      |
 | --------------------- | ------------------ | ---------------------------- |
@@ -1158,7 +1163,7 @@ Origout shares Fossil's insight that collaboration metadata belongs in queryable
 
 ---
 
-## 16. Conclusion
+## 19. Conclusion
 
 Origout is a decentralized Git collaboration system that removes centralized infrastructure while preserving usability, moderation, and clarity of authority.
 
@@ -1174,6 +1179,6 @@ By combining:
 * **Forking** as the ultimate escape hatch
 * **Practical security** optimized for legitimate users
 
-it offers a pragmatic alternative to both centralized platforms and overly complex decentralized designs.
+It offers a pragmatic alternative to both centralized platforms and overly complex decentralized designs.
 
 The name "origout" reflects the core philosophy: there is no origin, no single point of control—only distributed authority, explicit trust, practical anti-spam, and sound engineering.
