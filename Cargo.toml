@@ -1,0 +1,13 @@
+[package]
+name = "origout"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+futures-channel = "0.3.34"
+tokio = { version = "1.53.1", features = ["full"] }
+tokio-tungstenite = "0.30.0"
+futures-util = "0.3.34"
+ed25519-dalek = { version = "3.0.0", features = ["rand_core"] }
+getrandom = "0.4.3"
+dirs = "7.0.0"
