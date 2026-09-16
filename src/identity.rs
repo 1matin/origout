@@ -1,4 +1,4 @@
-use ed25519_dalek::SigningKey;
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use getrandom::SysRng;
 use getrandom::rand_core::UnwrapErr;
 use std::fs::File;
@@ -33,5 +33,13 @@ impl Identity {
 		}
 
 		Identity { keypair }
+	}
+
+	pub fn sign(&self, msg: &[u8]) -> Signature {
+		self.keypair.sign(msg)
+	}
+
+	pub fn verifying_key(&self) -> VerifyingKey {
+		self.keypair.verifying_key()
 	}
 }
