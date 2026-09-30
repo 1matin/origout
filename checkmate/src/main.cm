@@ -1,15 +1,59 @@
 import origout.fs as fs
 import origout.ed25519 as ed25519
+import origout.cli as cli
+
+KeyPair currentIdentity() {
+    str path = fs.GetConfigDir() + "/origout.conf"
+    if (fs.PathExists(path)) {
+        return ed25519.FromPrivateKey(fs.ReadBytes(path))
+    }
+
+    KeyPair pair = ed25519.GenerateKeyPair()
+    fs.WriteBytes(path, ed25519.DecodePrivateKey(pair.privateKey))
+    return pair
+}
 
 impl origout.identity {
     KeyPair GetCurrentIdentity() {
-        str path = fs.GetConfigDir() + "/origout.conf"
-        if (fs.PathExists(path)) {
-            return ed25519.FromPrivateKey(fs.ReadBytes(path))
+        return currentIdentity()
+    }
+}
+
+impl origout.app {
+    CliRunResult Run(str[] argv) {
+        int root = cli.NewCommand("origout")
+        cli.SetAbout(root, "Decentralized, authoritative Git collaboration")
+        cli.SetVersion(root, "0.1.0")
+        cli.RequireSubcommand(root)
+
+        int identity = cli.NewCommand("identity")
+        cli.SetAbout(identity, "Show the current identity")
+        int raw = cli.NewArgument("raw", "flag", "bool")
+        cli.SetLong(raw, "raw")
+        cli.SetHelp(raw, "Print only the public key")
+        cli.AddArgument(identity, raw)
+        cli.AddSubcommand(root, identity)
+
+        CliParseResult parsed = cli.Parse(root, argv)
+        if (parsed.matches == 0) {
+            return CliRunResult(exitCode: parsed.exitCode, output: parsed.output)
         }
 
-        KeyPair pair = ed25519.GenerateKeyPair()
-        fs.WriteBytes(path, ed25519.DecodePrivateKey(pair.privateKey))
-        return pair
+        if (cli.SubcommandName(parsed.matches) == "identity") {
+            int selected = cli.SubcommandMatches(parsed.matches)
+            KeyPair pair = currentIdentity()
+            option<bool> rawValue = cli.GetBool(selected, "raw")
+            match (rawValue) {
+                Some(bool show) => {
+                    if (show) {
+                        return CliRunResult(exitCode: 0, output: pair.publicKey + "\n")
+                    }
+                }
+                None() => {}
+            }
+            return CliRunResult(exitCode: 0, output: "Current public key: " + pair.publicKey + "\n")
+        }
+
+        return CliRunResult(exitCode: 2, output: "Unknown command\n")
     }
 }

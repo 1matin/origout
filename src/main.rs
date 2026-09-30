@@ -3,24 +3,29 @@ use getrandom::SysRng;
 use getrandom::rand_core::UnwrapErr;
 use std::path::Path;
 
+mod cli;
+
 #[doc = env!("SCHEMAS_HASH")]
 cme::cme_schema_setup! {
     schema = "schemas/origout.cm",
     program = mod "checkmate",
     limits = { max_call_depth: 1024 },
-    proxy = OrigoutIdentityProxy as identity,
+    proxy = OrigoutAppProxy as app,
     provider = fs => FsService,
     provider = ed25519 => Ed25519Service,
+    provider = cli => cli::CliService::default(),
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<std::process::ExitCode, Box<dyn std::error::Error>> {
     let host = Host::new()?;
-
-    let keypair = host.try_run(|session| session.identity.get_current_identity())??;
-
-    println!("Current public key: {}", keypair.public_key);
-    Ok(())
+    let result = host.try_run(|session| session.app.run(std::env::args().collect()))??;
+    if result.exit_code == 0 {
+        print!("{}", result.output);
+    } else {
+        eprint!("{}", result.output);
+    }
+    Ok(std::process::ExitCode::from(result.exit_code as u8))
 }
 
 struct FsService;

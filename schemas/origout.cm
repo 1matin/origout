@@ -6,8 +6,44 @@ struct KeyPair {
     str privateKey
 }
 
+struct CliParseResult {
+    int exitCode
+    int matches
+    str output
+}
+
+struct CliRunResult {
+    int exitCode
+    str output
+}
+
 since 0.1.0 interface identity {
     KeyPair GetCurrentIdentity()
+}
+
+since 0.1.0 interface app {
+    CliRunResult Run(str[] argv)
+}
+
+since 0.1.0 capability cli {
+    int NewCommand(str name)
+    void SetAbout(int command, str about)
+    void SetVersion(int command, str version)
+    void RequireSubcommand(int command)
+    int NewArgument(str name, str kind, str valueType)
+    void SetShort(int argument, str shortName)
+    void SetLong(int argument, str longName)
+    void SetHelp(int argument, str help)
+    void SetRequired(int argument, bool required)
+    void AddArgument(int command, int argument)
+    void AddSubcommand(int command, int subcommand)
+    CliParseResult Parse(int command, str[] argv)
+    str SubcommandName(int matches)
+    int SubcommandMatches(int matches)
+    option<str> GetString(int matches, str name)
+    option<int> GetInt(int matches, str name)
+    option<float> GetFloat(int matches, str name)
+    option<bool> GetBool(int matches, str name)
 }
 
 since 0.1.0 capability fs {

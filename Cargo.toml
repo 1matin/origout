@@ -13,3 +13,4 @@ getrandom = "0.4.3"
 dirs = "7.0.0"
 cme = { path = "../checkmate", version = "0.4.0", features = ["api", "schema-macro"] }
 anyhow = "1.0.104"
+clap = { version = "4.5", features = ["string"] }

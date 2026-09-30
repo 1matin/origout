@@ -2,6 +2,12 @@
 
 You can read the whitepaper of Origout [here](WHITEPAPER.md).
 
+## CLI
+
+Run `origout identity` to show the current public key, or `origout identity --raw` to print only the key. Run `origout --help` for command help.
+
+The Checkmate module defines the command tree at runtime through the `origout.cli` capability in `schemas/origout.cm`. Its `origout.app.Run` entry receives the process arguments and returns output and an exit code to the Rust host.
+
 ## Copyright
 
 Origout: A Decentralized, Authoritative Git Collaboration Protocol Copyright (C) 2026 Matin Mohammadi
