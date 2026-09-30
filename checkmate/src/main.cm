@@ -2,6 +2,46 @@ import origout.fs as fs
 import origout.ed25519 as ed25519
 import origout.cli as cli
 
+// The CLI declaration expands to the builder calls before Checkmate checks Run.
+grammar commandLine {
+    skip [ ' ', '\t', '\r', '\n' ]
+    string ( '"' )
+
+    rule app {
+        "app" $word name $str about "version" $str version
+        "{" each { command } as commands "}"
+    }
+
+    rule command {
+        "command" $word name $str about
+        "{" each { flag } as flags "}"
+    }
+
+    rule flag {
+        "flag" $word name $str help
+    }
+}
+
+mega defineCli(commandLine.app as app) {
+    int root = cli.NewCommand($"{$app.name}")
+    cli.SetAbout(root, $app.about)
+    cli.SetVersion(root, $app.version)
+    cli.RequireSubcommand(root)
+
+    [each in $app.commands {
+        let command = $item
+        int $item.name = cli.NewCommand($"{$item.name}")
+        cli.SetAbout($item.name, $item.about)
+        [each in $item.flags {
+            int $item.name = cli.NewArgument($"{$item.name}", "flag", "bool")
+            cli.SetLong($item.name, $"{$item.name}")
+            cli.SetHelp($item.name, $item.help)
+            cli.AddArgument($command.name, $item.name)
+        }]
+        cli.AddSubcommand(root, $item.name)
+    }]
+}
+
 KeyPair currentIdentity() {
     str path = fs.GetConfigDir() + "/origout.conf"
     if (fs.PathExists(path)) {
@@ -21,18 +61,13 @@ impl origout.identity {
 
 impl origout.app {
     CliRunResult Run(str[] argv) {
-        int root = cli.NewCommand("origout")
-        cli.SetAbout(root, "Decentralized, authoritative Git collaboration")
-        cli.SetVersion(root, "0.1.0")
-        cli.RequireSubcommand(root)
-
-        int identity = cli.NewCommand("identity")
-        cli.SetAbout(identity, "Show the current identity")
-        int raw = cli.NewArgument("raw", "flag", "bool")
-        cli.SetLong(raw, "raw")
-        cli.SetHelp(raw, "Print only the public key")
-        cli.AddArgument(identity, raw)
-        cli.AddSubcommand(root, identity)
+        defineCli! {
+            app origout "Decentralized, authoritative Git collaboration" version "0.1.0" {
+                command identity "Show the current identity" {
+                    flag raw "Print only the public key"
+                }
+            }
+        }
 
         CliParseResult parsed = cli.Parse(root, argv)
         if (parsed.matches == 0) {

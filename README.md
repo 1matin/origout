@@ -6,7 +6,7 @@ You can read the whitepaper of Origout [here](WHITEPAPER.md).
 
 Run `origout identity` to show the current public key, or `origout identity --raw` to print only the key. Run `origout --help` for command help.
 
-The Checkmate module defines the command tree at runtime through the `origout.cli` capability in `schemas/origout.cm`. Its `origout.app.Run` entry receives the process arguments and returns output and an exit code to the Rust host.
+The Checkmate module declares the command tree with a `defineCli` megaprogram, which expands to calls to the `origout.cli` capability in `schemas/origout.cm`. Its `origout.app.Run` entry receives the process arguments and returns output and an exit code to the Rust host.
 
 ## Copyright
 
