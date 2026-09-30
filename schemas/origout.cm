@@ -1,0 +1,27 @@
+schema origout 0.1.0
+
+// Both keys are 32-byte Ed25519 values encoded as lowercase hex.
+struct KeyPair {
+    str publicKey
+    str privateKey
+}
+
+since 0.1.0 interface identity {
+    KeyPair GetCurrentIdentity()
+}
+
+since 0.1.0 capability fs {
+    str GetConfigDir()
+    bool PathExists(str path)
+    str ReadFile(str path)
+    byte[] ReadBytes(str path)
+    bool DeleteFile(str path)
+    bool WriteFile(str path, str content)
+    void WriteBytes(str path, byte[] content)
+}
+
+since 0.1.0 capability ed25519 {
+    KeyPair GenerateKeyPair()
+    KeyPair FromPrivateKey(byte[] privateKey)
+    byte[] DecodePrivateKey(str privateKey)
+}

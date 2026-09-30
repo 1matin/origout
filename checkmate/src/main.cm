@@ -1,0 +1,15 @@
+import origout.fs as fs
+import origout.ed25519 as ed25519
+
+impl origout.identity {
+    KeyPair GetCurrentIdentity() {
+        str path = fs.GetConfigDir() + "/origout.conf"
+        if (fs.PathExists(path)) {
+            return ed25519.FromPrivateKey(fs.ReadBytes(path))
+        }
+
+        KeyPair pair = ed25519.GenerateKeyPair()
+        fs.WriteBytes(path, ed25519.DecodePrivateKey(pair.privateKey))
+        return pair
+    }
+}

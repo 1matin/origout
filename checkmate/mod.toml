@@ -1,0 +1,6 @@
+name = "origout"
+version = "1.0.0"
+checkmate_version = "0.4.0"
+
+[schemas]
+origout = "0.1.0"

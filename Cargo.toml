@@ -11,3 +11,5 @@ futures-util = "0.3.34"
 ed25519-dalek = { version = "3.0.0", features = ["rand_core"] }
 getrandom = "0.4.3"
 dirs = "7.0.0"
+cme = { path = "../checkmate", version = "0.4.0", features = ["api", "schema-macro"] }
+anyhow = "1.0.104"
